@@ -1,0 +1,114 @@
+# Importing required libraries
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, r2_score
+from math import sqrt
+import matplotlib.pyplot as plt
+
+# Loading the data
+df = pd.read_csv('pfd_data.csv')
+
+# Defining target and predictors
+target_column = ['Speed_of_Sound']
+predictors = ['Temperature', 'Pressure']
+
+# Data splitting : features and target
+X = df[predictors].values
+y = df[target_column].values
+
+# Scaling features and target
+feature_scaler = MinMaxScaler()
+X = feature_scaler.fit_transform(X)
+
+target_scaler = MinMaxScaler()
+y = target_scaler.fit_transform(y)
+
+# Splitting the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=40)
+
+# Initializing and training the model
+mlp = MLPRegressor(hidden_layer_sizes=(10, 10), activation='relu', solver='adam',
+                   learning_rate_init=0.001, max_iter=1000, random_state=40)
+mlp.fit(X_train, y_train.ravel())
+
+# Making predictions
+predict_train = mlp.predict(X_train)
+predict_test = mlp.predict(X_test)
+
+# Inverse transforming predictions and target to original scale
+y_train_actual = target_scaler.inverse_transform(y_train)
+y_test_actual = target_scaler.inverse_transform(y_test)
+predict_train_actual = target_scaler.inverse_transform(predict_train.reshape(-1, 1))
+predict_test_actual = target_scaler.inverse_transform(predict_test.reshape(-1, 1))
+
+# Calculating evaluation metrics
+def calculate_metrics(y_actual, y_predicted):
+    mse = mean_squared_error(y_actual, y_predicted)
+    rmse = sqrt(mse)
+    r2 = r2_score(y_actual, y_predicted)
+    return mse, rmse, r2
+
+train_mse, train_rmse, train_r2 = calculate_metrics(y_train_actual, predict_train_actual)
+test_mse, test_rmse, test_r2 = calculate_metrics(y_test_actual, predict_test_actual)
+
+# Printing evaluation metrics
+print("Training MSE:", train_mse)
+print("Training RMSE:", train_rmse)
+print(f"Test R\u00b2: {train_r2}")
+print("Test MSE:", test_mse)
+print("Test RMSE:", test_rmse)
+print(f"Test R\u00b2: {test_r2}")
+
+
+# Creating subplots for all plots
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+
+# Plot 1: Experimental vs Predicted (Training Data)
+axs[0, 0].scatter(y_train_actual, predict_train_actual, color='blue', alpha=0.5)
+axs[0, 0].plot([min(y_train_actual), max(y_train_actual)], [min(y_train_actual), max(y_train_actual)],
+               color='red', linewidth=2)
+axs[0, 0].set_xlabel(r"$c_{\text{experimental,training}}$ [m s$^{-1}$]")
+axs[0, 0].set_ylabel(r"$c_{\text{predicted,training}}$ [m s$^{-1}$]")
+axs[0, 0].set_title("Experimental vs. Predicted $c$ - Training Data")
+
+# Plot 2: Experimental vs Predicted (Test Data)
+axs[0, 1].scatter(y_test_actual, predict_test_actual, color='green', alpha=0.5)
+axs[0, 1].plot([min(y_test_actual), max(y_test_actual)], [min(y_test_actual), max(y_test_actual)],
+               color='red', linewidth=2)
+axs[0, 1].set_xlabel(r"$c_{\text{experimental,test}}$ [m s$^{-1}$]")
+axs[0, 1].set_ylabel(r"$c_{\text{predicted,test}}$ [m s$^{-1}$]")
+axs[0, 1].set_title("Experimental vs. Predicted $c$ - Test Data")
+
+# Plot 3: Residuals (Training Data)
+axs[1, 0].scatter(range(len(y_train_actual)), y_train_actual - predict_train_actual, color='blue', alpha=0.5)
+axs[1, 0].axhline(y=0, color='red', linestyle='--')
+axs[1, 0].set_xlabel("Training Samples")
+axs[1, 0].set_ylabel("Residuals [m s$^{-1}$] ")
+axs[1, 0].set_title("Residuals - Training Data")
+
+# Plot 4: Residuals (Test Data)
+axs[1, 1].scatter(range(len(y_test_actual)), y_test_actual - predict_test_actual, color='green', alpha=0.5)
+axs[1, 1].axhline(y=0, color='red', linestyle='--')
+axs[1, 1].set_xlabel("Test Samples")
+axs[1, 1].set_ylabel("Residuals [m s$^{-1}$]")
+axs[1, 1].set_title("Residuals - Test Data")
+
+plt.tight_layout()
+plt.show()
+
+# Function to predict speed of sound for new inputs
+def predict_speed_of_sound(temperature, pressure):
+    input_data = np.array([[temperature, pressure]])
+    scaled_input = feature_scaler.transform(input_data)
+    scaled_prediction = mlp.predict(scaled_input)
+    original_prediction = target_scaler.inverse_transform(scaled_prediction.reshape(-1, 1))
+    return original_prediction[0][0]
+
+# Example prediction
+input_temperature = 725
+input_pressure = 0.25
+predicted_speed_of_sound = predict_speed_of_sound(input_temperature, input_pressure)
+print(f"Predicted Speed of Sound at T={input_temperature} K and P={input_pressure} MPa: {predicted_speed_of_sound:.2f} m/s")
